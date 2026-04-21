@@ -11,13 +11,16 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
     
+    #USERS table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE
+        username TEXT UNIQUE,
+        password TEXT
     )               
     """)
     
+    #AUCTIONS TABLE
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS auctions(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,6 +30,7 @@ def init_db():
     )               
     """)
     
+    #COMMITS TABLE
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS commits (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,6 +42,7 @@ def init_db():
     )               
     """)
     
+    #REVEALS TABLE
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS reveals(
         id INTEGER PRIMARY KEY AUTOINCREMENT,

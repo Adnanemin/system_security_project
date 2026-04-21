@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from database import init_db, get_db
-from crypto import commit_hash
+from crypto import commit_hash, hash_password
 from datetime import datetime
 
 app = Flask(__name__)
@@ -14,12 +14,15 @@ def check_commit_deadline(auction_id):
     cursor.execute("SELECT commit_deadline FROM auctions WHERE id=?", (auction_id,))
     row = cursor.fetchone()
     conn.close()
-    
-    if row and row[0]:
-        deadline = datetime.fromisoformat(row[0])
-        if datetime.now() > deadline:
-            return False
-        return True
+
+    if not row:
+        return True  # no auction found, allow for now
+
+    deadline = row[0]
+    if deadline:
+        deadline = datetime.fromisoformat(deadline)
+        return datetime.now() <= deadline
+
     return True
     
 def check_reveal_deadline(auction_id):
@@ -28,18 +31,76 @@ def check_reveal_deadline(auction_id):
     cursor.execute("SELECT reveal_deadline FROM auctions WHERE id=?", (auction_id,))
     row = cursor.fetchone()
     conn.close()
-    
-    if row and row[0]:
-        deadline = datetime.fromisoformat(row[0])
-        if datetime.now() > deadline:
-            return False
-        return True
+
+    if not row:
+        return True  # no auction found, allow for now
+
+    deadline = row[0]
+    if deadline:
+        deadline = datetime.fromisoformat(deadline)
+        return datetime.now() <= deadline
+
     return True
 
 #TEST endpoint
 @app.route("/")
 def home():
     return "Auction API is running"
+
+#REGIRSTER
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.json
+    
+    username = data["username"]
+    password = data["password"]
+    
+    hashed = hash_password(password)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+        INSERT INTO users (username, password)
+        VALUES (?, ?)
+        """, (username, hashed))
+
+        conn.commit()
+        return jsonify({"message": "User created"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+    finally:
+        conn.close()
+        
+#LOGIN
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.json
+    
+    username = data["username"]
+    password = data["password"]
+    
+    hashed = hash_password(password)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    SELECT id FROM users
+    WHERE username=? AND password=?
+    """, (username, hashed))
+
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return jsonify({"error": "Invalid credentials"}), 401
+    
+    return jsonify({
+        "message": "Login successful",
+        "user_id": row["id"]
+    })
 
 #COMMIT
 @app.route("/commit", methods=["POST"])
@@ -48,7 +109,13 @@ def commit():
     
     user_id = data["user_id"]
     auction_id = data["auction_id"]
-    commitment = data["commitment"]
+    bid = data["bid"]
+    salt = data["salt"]
+
+    if not all([user_id, auction_id, bid, salt]):
+        return jsonify({"error": "Missing fields"}), 400
+
+    commitment = commit_hash(bid, salt)
     
     # deadline check
     if not check_commit_deadline(auction_id):
@@ -81,6 +148,9 @@ def reveal():
     auction_id = data["auction_id"]
     bid = data["bid"]
     salt = data["salt"]
+
+    if not all([user_id, auction_id, bid, salt]):
+        return jsonify({"error": "Missing fields"}), 400
     
     # deadline check
     if not check_reveal_deadline(auction_id):
@@ -88,6 +158,15 @@ def reveal():
     
     conn = get_db()
     cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT id FROM reveals
+    WHERE user_id=? AND auction_id=?
+    """, (user_id, auction_id))
+    
+    existing = cursor.fetchone()
+    if existing:
+        return jsonify({"error": "Reveal already submitted"}), 400
     
     try:
         cursor.execute("""
