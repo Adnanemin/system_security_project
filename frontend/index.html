@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Secure Auction</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -23,6 +24,7 @@
 <input id="salt" placeholder="salt" readonly>
 <button type="button" onclick="generateSalt()">Generate Salt</button>
 <p id="salt_info"></p>
+<button type="button" onclick="copySalt()">Copy Salt</button>
 <button type="button" onclick="commit()">Commit</button>
 <p id="commit_status"></p>
 
@@ -36,14 +38,8 @@
 <button type="button" onclick="winner()">Get Winner</button>
 <p id="winner_status"></p>
 
-<pre id="output"></pre>
-
 <script>
 let user_id = null;
-
-function show(res) {
-    document.getElementById("output").innerText = JSON.stringify(res, null, 2);
-}
 
 function register() {
     fetch("http://127.0.0.1:5000/register", {
@@ -54,7 +50,7 @@ function register() {
             password: document.getElementById("r_pass").value
         })
     }).then(r => r.json()).then(data => {
-        document.getElementById("register_status").innerText = JSON.stringify(data);
+        document.getElementById("register_status").innerText = data.message || "Registration completed.";
     });
 }
 
@@ -71,9 +67,10 @@ function login() {
     .then(data => {
         if(data.user_id){
             user_id = data.user_id;
-            document.getElementById("login_status").innerText = "Logged in as user " + user_id;
+            document.getElementById("login_status").innerText = data.message;
+        } else {
+            document.getElementById("login_status").innerText = data.error || "Login failed.";
         }
-        document.getElementById("login_status").innerText = "Logged in as user " + user_id + " | " + JSON.stringify(data);
     });
 }
 
@@ -82,9 +79,25 @@ function generateSalt() {
     document.getElementById("salt").value = random;
 }
 
+function copySalt() {
+    const salt = document.getElementById("salt").value;
+    if (!salt) {
+        alert("No salt to copy!");
+        return;
+    }
+    navigator.clipboard.writeText(salt);
+    alert("Salt copied!");
+}
+
 function commit() {
     if(!user_id){
         alert("Login first!");
+        return;
+    }
+
+    const bidValue = parseInt(document.getElementById("bid").value);
+    if (isNaN(bidValue)) {
+        alert("Please enter a valid bid!");
         return;
     }
 
@@ -100,11 +113,11 @@ function commit() {
         body: JSON.stringify({
             user_id: user_id,
             auction_id: 1,
-            bid: parseInt(document.getElementById("bid").value),
+            bid: bidValue,
             salt: saltValue
         })
     }).then(r => r.json()).then(data => {
-        document.getElementById("commit_status").innerText = JSON.stringify(data);
+        document.getElementById("commit_status").innerText = data.message || "Commit completed.";
         document.getElementById("salt_info").innerText = "IMPORTANT: Save this salt for reveal -> " + saltValue;
     });
 }
@@ -115,17 +128,30 @@ function reveal() {
         return;
     }
 
+    const bidValue = parseInt(document.getElementById("rbid").value);
+    const revealSalt = document.getElementById("rsalt").value;
+
+    if (isNaN(bidValue)) {
+        alert("Please enter a valid bid!");
+        return;
+    }
+
+    if (!revealSalt) {
+        alert("Please enter your salt!");
+        return;
+    }
+
     fetch("http://127.0.0.1:5000/reveal", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
             user_id: user_id,
             auction_id: 1,
-            bid: parseInt(document.getElementById("rbid").value),
-            salt: document.getElementById("rsalt").value
+            bid: bidValue,
+            salt: revealSalt
         })
     }).then(r => r.json()).then(data => {
-        document.getElementById("reveal_status").innerText = JSON.stringify(data);
+        document.getElementById("reveal_status").innerText = data.message || "Reveal processed.";
     });
 }
 
@@ -133,7 +159,7 @@ function winner() {
     fetch("http://127.0.0.1:5000/winner/1")
     .then(r => r.json())
     .then(data => {
-        document.getElementById("winner_status").innerText = JSON.stringify(data);
+        document.getElementById("winner_status").innerText = data.message || ("Winner: " + data.winner + " with bid " + data.bid);
     });
 }
 </script>
