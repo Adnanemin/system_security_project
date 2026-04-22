@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Secure Auction</title>
+</head>
+<body>
+
+<h2>Register</h2>
+<input id="r_user" placeholder="username">
+<input id="r_pass" placeholder="password">
+<button type="button" onclick="register()">Register</button>
+<p id="register_status"></p>
+
+<h2>Login</h2>
+<input id="l_user" placeholder="username">
+<input id="l_pass" placeholder="password">
+<button type="button" onclick="login()">Login</button>
+
+<p id="login_status"></p>
+
+<h2>Commit</h2>
+<input id="bid" placeholder="bid">
+<input id="salt" placeholder="salt">
+<button type="button" onclick="commit()">Commit</button>
+<p id="commit_status"></p>
+
+<h2>Reveal</h2>
+<input id="rbid" placeholder="bid">
+<input id="rsalt" placeholder="salt">
+<button type="button" onclick="reveal()">Reveal</button>
+<p id="reveal_status"></p>
+
+<h2>Winner</h2>
+<button type="button" onclick="winner()">Get Winner</button>
+<p id="winner_status"></p>
+
+<pre id="output"></pre>
+
+<script>
+let user_id = null;
+
+function show(res) {
+    document.getElementById("output").innerText = JSON.stringify(res, null, 2);
+}
+
+function register() {
+    fetch("http://127.0.0.1:5000/register", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            username: document.getElementById("r_user").value,
+            password: document.getElementById("r_pass").value
+        })
+    }).then(r => r.json()).then(data => {
+        document.getElementById("register_status").innerText = JSON.stringify(data);
+    });
+}
+
+function login() {
+    fetch("http://127.0.0.1:5000/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            username: document.getElementById("l_user").value,
+            password: document.getElementById("l_pass").value
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if(data.user_id){
+            user_id = data.user_id;
+            document.getElementById("login_status").innerText = "Logged in as user " + user_id;
+        }
+        document.getElementById("login_status").innerText = "Logged in as user " + user_id + " | " + JSON.stringify(data);
+    });
+}
+
+function commit() {
+    if(!user_id){
+        alert("Login first!");
+        return;
+    }
+
+    fetch("http://127.0.0.1:5000/commit", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            user_id: user_id,
+            auction_id: 1,
+            bid: parseInt(document.getElementById("bid").value),
+            salt: document.getElementById("salt").value
+        })
+    }).then(r => r.json()).then(data => {
+        document.getElementById("commit_status").innerText = JSON.stringify(data);
+    });
+}
+
+function reveal() {
+    if(!user_id){
+        alert("Login first!");
+        return;
+    }
+
+    fetch("http://127.0.0.1:5000/reveal", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            user_id: user_id,
+            auction_id: 1,
+            bid: parseInt(document.getElementById("rbid").value),
+            salt: document.getElementById("rsalt").value
+        })
+    }).then(r => r.json()).then(data => {
+        document.getElementById("reveal_status").innerText = JSON.stringify(data);
+    });
+}
+
+function winner() {
+    fetch("http://127.0.0.1:5000/winner/1")
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById("winner_status").innerText = JSON.stringify(data);
+    });
+}
+</script>
+
+</body>
+</html>
