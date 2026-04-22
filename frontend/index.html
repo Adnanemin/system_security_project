@@ -20,7 +20,9 @@
 
 <h2>Commit</h2>
 <input id="bid" placeholder="bid">
-<input id="salt" placeholder="salt">
+<input id="salt" placeholder="salt" readonly>
+<button type="button" onclick="generateSalt()">Generate Salt</button>
+<p id="salt_info"></p>
 <button type="button" onclick="commit()">Commit</button>
 <p id="commit_status"></p>
 
@@ -75,9 +77,20 @@ function login() {
     });
 }
 
+function generateSalt() {
+    const random = Math.random().toString(36).substring(2, 10);
+    document.getElementById("salt").value = random;
+}
+
 function commit() {
     if(!user_id){
         alert("Login first!");
+        return;
+    }
+
+    const saltValue = document.getElementById("salt").value;
+    if(!saltValue){
+        alert("Please generate a salt first!");
         return;
     }
 
@@ -88,10 +101,11 @@ function commit() {
             user_id: user_id,
             auction_id: 1,
             bid: parseInt(document.getElementById("bid").value),
-            salt: document.getElementById("salt").value
+            salt: saltValue
         })
     }).then(r => r.json()).then(data => {
         document.getElementById("commit_status").innerText = JSON.stringify(data);
+        document.getElementById("salt_info").innerText = "IMPORTANT: Save this salt for reveal -> " + saltValue;
     });
 }
 
