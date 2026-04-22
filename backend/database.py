@@ -16,7 +16,9 @@ def init_db():
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE,
-        password TEXT
+        password TEXT,
+        public_key TEXT,
+        private_key TEXT
     )               
     """)
     
@@ -37,6 +39,7 @@ def init_db():
         user_id INTEGER,
         auction_id INTEGER,
         commitment TEXT,
+        signature TEXT,
         timestamp TEXT,
         UNIQUE(user_id, auction_id)
     )               

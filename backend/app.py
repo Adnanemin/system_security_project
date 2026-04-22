@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify
 from database import init_db, get_db
-from crypto import commit_hash, hash_password
+from crypto import commit_hash, hash_password, generate_keys, sign_data, verify_signature
 from datetime import datetime
+import sqlite3
 
 app = Flask(__name__)
 
@@ -57,14 +58,16 @@ def register():
     
     hashed = hash_password(password)
     
+    private_key, public_key = generate_keys()
+    
     conn = get_db()
     cursor = conn.cursor()
     
     try:
         cursor.execute("""
-        INSERT INTO users (username, password)
-        VALUES (?, ?)
-        """, (username, hashed))
+        INSERT INTO users (username, password, public_key, private_key)
+        VALUES (?, ?, ?, ?)
+        """, (username, hashed, public_key, private_key))
 
         conn.commit()
         return jsonify({"message": "User created"})
@@ -116,23 +119,33 @@ def commit():
         return jsonify({"error": "Missing fields"}), 400
 
     commitment = commit_hash(bid, salt)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT private_key FROM users WHERE id=?", (user_id,))
+    row = cursor.fetchone()
     
+    if not row:
+        return jsonify({"error": "User not found"}), 400
+    
+    private_key = row["private_key"]
+    signature = sign_data(private_key, commitment)
+
     # deadline check
     if not check_commit_deadline(auction_id):
         return jsonify({"error": "Commit phase ended"}), 400
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
+
     try:
         cursor.execute("""
-        INSERT INTO commits (user_id, auction_id, commitment, timestamp)
-        VALUES (?, ?, ?, datetime('now'))
-        """, (user_id, auction_id, commitment))
-        
+        INSERT INTO commits (user_id, auction_id, commitment, signature, timestamp)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        """, (user_id, auction_id, commitment, signature))
+
         conn.commit()
         return jsonify({"message": "Commit stored"}), 200
-    
+
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "User Already committed"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     finally:
@@ -170,7 +183,7 @@ def reveal():
     
     try:
         cursor.execute("""
-        SELECT commitment FROM commits
+        SELECT commitment, signature FROM commits
         WHERE user_id=? AND auction_id=?
         """, (user_id, auction_id))
         
@@ -180,9 +193,22 @@ def reveal():
             return jsonify({"error": "No commit found"}), 400
         
         stored_commitment = row["commitment"]
+        signature = row["signature"]
         computed = commit_hash(bid, salt)
 
-        valid = int(computed == stored_commitment)
+        # get public key
+        cursor.execute("SELECT public_key FROM users WHERE id=?", (user_id,))
+        
+        row_user = cursor.fetchone()
+        if not row_user:
+            return jsonify({"error": "User not found"}), 400
+        
+        pub = row_user["public_key"]
+
+        # verify signature
+        valid_sig = verify_signature(pub, stored_commitment, signature)
+
+        valid = int(computed == stored_commitment and valid_sig)
 
         cursor.execute("""
         INSERT INTO reveals (user_id, auction_id, bid, salt, valid)
