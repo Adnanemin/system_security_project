@@ -1,10 +1,10 @@
 
 
-# 🔐 Secure Auction System (Commit–Reveal Protocol)
+# Secure Auction System (Commit–Reveal Protocol)
 
 This project implements a secure auction system using a **commit–reveal protocol** combined with **cryptographic hashing and digital signatures**.
 
-## 🎯 Objective
+##  Objective
 
 The goal is to ensure:
 
@@ -15,7 +15,7 @@ The goal is to ensure:
 
 ---
 
-## ⚙️ How It Works
+## How It Works
 
 ### 1. Commit Phase
 - User submits a bid in a **hidden form**
@@ -48,7 +48,7 @@ commitment = hash(bid + salt)
 
 ---
 
-## 🔐 Security Features
+## Security Features
 
 - **Hashing (SHA-256)** → ensures data integrity  
 - **Salt** → prevents brute-force attacks  
@@ -58,7 +58,7 @@ commitment = hash(bid + salt)
 
 ---
 
-## 🧑‍💻 Technologies Used
+## Technologies Used
 
 - **Backend:** Python (Flask)
 - **Database:** SQLite
@@ -67,7 +67,7 @@ commitment = hash(bid + salt)
 
 ---
 
-## 🚀 How to Run
+##  How to Run
 
 ### 1. Start Backend
 
@@ -95,7 +95,7 @@ http://localhost:8000
 
 ---
 
-## 🧪 Demo Flow
+## Demo Flow
 
 1. Register two users  
 2. Login  
@@ -106,7 +106,7 @@ http://localhost:8000
 
 ---
 
-## ⚠️ Notes
+## Notes
 
 - Users must **save their salt** after commit  
 - Without salt, reveal is not possible  
@@ -114,7 +114,7 @@ http://localhost:8000
 
 ---
 
-## 🔮 Future Improvements
+## Future Improvements
 
 - Server-side salt generation  
 - Multi-auction support  
@@ -123,6 +123,6 @@ http://localhost:8000
 
 ---
 
-## 👨‍🎓 Project Context
+## Project Context
 
 This project was developed as part of a **System Security course**, focusing on practical implementation of cryptographic protocols.
