@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from database import init_db, get_db
 from crypto import commit_hash, hash_password, generate_keys, sign_data, verify_signature
 from datetime import datetime
 import sqlite3
 
 app = Flask(__name__)
+CORS(app)
 
 init_db()
 
@@ -70,7 +72,7 @@ def register():
         """, (username, hashed, public_key, private_key))
 
         conn.commit()
-        return jsonify({"message": "User created"})
+        return jsonify({"message": f"User '{username}' registered successfully."})
     except Exception as e:
         return jsonify({"error": str(e)})
     finally:
@@ -101,7 +103,7 @@ def login():
         return jsonify({"error": "Invalid credentials"}), 401
     
     return jsonify({
-        "message": "Login successful",
+        "message": f"Welcome, {username}! Login successful.",
         "user_id": row["id"]
     })
 
@@ -142,12 +144,12 @@ def commit():
         """, (user_id, auction_id, commitment, signature))
 
         conn.commit()
-        return jsonify({"message": "Commit stored"}), 200
+        return jsonify({"message": "Your bid has been securely submitted (commit phase complete)."}), 200
 
     except sqlite3.IntegrityError:
         return jsonify({"error": "User Already committed"}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
     
@@ -217,7 +219,10 @@ def reveal():
 
         conn.commit()
         
-        return jsonify({"valid": bool(valid)})
+        if valid:
+            return jsonify({"message": "Your bid has been successfully revealed and verified."})
+        else:
+            return jsonify({"message": "Reveal failed: your bid does not match the original commitment."}), 400
     finally:
         conn.close()
 
@@ -228,9 +233,11 @@ def winner(auction_id):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-        SELECT user_id, bid FROM reveals
-        WHERE auction_id=? AND valid=1
-        ORDER BY bid DESC
+        SELECT users.username, reveals.bid
+        FROM reveals
+        JOIN users ON users.id = reveals.user_id
+        WHERE reveals.auction_id=? AND reveals.valid=1
+        ORDER BY reveals.bid DESC
         LIMIT 1
         """, (auction_id,))
         
@@ -239,8 +246,9 @@ def winner(auction_id):
         if not row:
             return jsonify({"message": "No valid bids"})
         return jsonify({
-            "winner_user_id": row["user_id"],
-            "bid": row["bid"]
+            "winner": row["username"],
+            "bid": row["bid"],
+            "message": f"The winner is {row['username']} with a bid of {row['bid']}."
         })
     finally:
         conn.close()
