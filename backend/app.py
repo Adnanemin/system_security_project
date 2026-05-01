@@ -2,13 +2,16 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from database import init_db, get_db
 from crypto import commit_hash, hash_password, generate_keys, sign_data, verify_signature
-from datetime import datetime
+import datetime
 import sqlite3
+import jwt
 
 app = Flask(__name__)
 CORS(app)
 
 init_db()
+
+SECRET_KEY = "supersecretkey"
 
 # helper to check deadlines
 def check_commit_deadline(auction_id):
@@ -23,8 +26,8 @@ def check_commit_deadline(auction_id):
 
     deadline = row[0]
     if deadline:
-        deadline = datetime.fromisoformat(deadline)
-        return datetime.now() <= deadline
+        deadline = datetime.datetime.fromisoformat(deadline)
+        return datetime.datetime.now() <= deadline
 
     return True
     
@@ -40,8 +43,8 @@ def check_reveal_deadline(auction_id):
 
     deadline = row[0]
     if deadline:
-        deadline = datetime.fromisoformat(deadline)
-        return datetime.now() <= deadline
+        deadline = datetime.datetime.fromisoformat(deadline)
+        return datetime.datetime.now() <= deadline
 
     return True
 
@@ -50,13 +53,37 @@ def check_reveal_deadline(auction_id):
 def home():
     return "Auction API is running"
 
+#Token read
+def get_user_from_token():
+    auth = request.headers.get("Authorization")
+    
+    if not auth:
+        return None
+    
+    try:
+        parts = auth.strip().split()
+        if len(parts) != 2 or parts[0] != "Bearer":
+            return None
+        
+        token = parts[1]
+        data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return data["user_id"]
+    
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+    
 #REGIRSTER
 @app.route("/register", methods=["POST"])
 def register():
     data = request.json
     
-    username = data["username"]
-    password = data["password"]
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Missing username or password"}), 400
     
     hashed = hash_password(password)
     
@@ -73,8 +100,10 @@ def register():
 
         conn.commit()
         return jsonify({"message": f"User '{username}' registered successfully."})
-    except Exception as e:
-        return jsonify({"error": str(e)})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Username already exists."}), 400
+    except Exception:
+        return jsonify({"error": "Registration failed."}), 400
     finally:
         conn.close()
         
@@ -83,9 +112,12 @@ def register():
 def login():
     data = request.json
     
-    username = data["username"]
-    password = data["password"]
+    username = data.get("username")
+    password = data.get("password")
     
+    if not username or not password:
+        return jsonify({"error": "Missing username or password."}), 400
+
     hashed = hash_password(password)
     
     conn = get_db()
@@ -102,9 +134,17 @@ def login():
     if not row:
         return jsonify({"error": "Invalid credentials"}), 401
     
+    token = jwt.encode({
+        "user_id": row["id"],
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    }, SECRET_KEY , algorithm="HS256")
+    
+    if isinstance(token, bytes):
+        token = token.decode("utf-8")
+    
     return jsonify({
         "message": f"Welcome, {username}! Login successful.",
-        "user_id": row["id"]
+        "token": token
     })
 
 #COMMIT
@@ -112,12 +152,15 @@ def login():
 def commit():
     data = request.json
     
-    user_id = data["user_id"]
+    user_id = get_user_from_token()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    
     auction_id = data["auction_id"]
     bid = data["bid"]
     salt = data["salt"]
 
-    if not all([user_id, auction_id, bid, salt]):
+    if auction_id is None or bid is None or not salt:
         return jsonify({"error": "Missing fields"}), 400
 
     commitment = commit_hash(bid, salt)
@@ -144,12 +187,12 @@ def commit():
         """, (user_id, auction_id, commitment, signature))
 
         conn.commit()
-        return jsonify({"message": "Your bid has been securely submitted (commit phase complete)."}), 200
+        return jsonify({"message": "Your bid has been securely submitted. (commit phase complete)."}), 200
 
     except sqlite3.IntegrityError:
         return jsonify({"error": "User Already committed"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return jsonify({"error": "Commit failed."}), 400
     finally:
         conn.close()
     
@@ -159,12 +202,15 @@ def commit():
 def reveal():
     data = request.json
     
-    user_id = data["user_id"]
+    user_id = get_user_from_token()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    
     auction_id = data["auction_id"]
     bid = data["bid"]
     salt = data["salt"]
 
-    if not all([user_id, auction_id, bid, salt]):
+    if auction_id is None or bid is None or not salt:
         return jsonify({"error": "Missing fields"}), 400
     
     # deadline check
@@ -181,7 +227,7 @@ def reveal():
     
     existing = cursor.fetchone()
     if existing:
-        return jsonify({"error": "Reveal already submitted"}), 400
+        return jsonify({"error": "You have already revealed your bid for this auction."}), 400
     
     try:
         cursor.execute("""
